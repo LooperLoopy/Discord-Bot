@@ -5,6 +5,21 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-token = os.getenv('DICORD_TOKEN')
+token = os.getenv("DISCORD_TOKEN")
 
-print("Hello World")
+handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
+intents = discord.Intents.default()
+intents.message_content = True
+# intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Bot Ready: {bot.user.name}")
+
+@bot.command
+async def hello(ctx):
+    await ctx.send(f"Hello {ctx.author.mention}")
+
+bot.run(token, log_handler=handler, log_level=logging.DEBUG)
