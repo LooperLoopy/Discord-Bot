@@ -18,7 +18,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"Bot Ready: {bot.user.name}")
 
-@bot.command
+@bot.command()
 async def hello(ctx):
     await ctx.send(f"Hello {ctx.author.mention}")
 
