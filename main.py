@@ -49,6 +49,7 @@ async def play_next_song(voice_client, gID, channel):
         asyncio.create_task(channel.send(f"Now Playing: {title}"))
 
     else:
+        asyncio.create_task(channel.send("Queue empty, Loobot is now disconnected. Bye!"))
         await voice_client.disconnect()
         queues[gID] = deque()
 
@@ -120,7 +121,6 @@ async def stop(ctx):
     if voice_client.is_playing() or voice_client.is_paused():
         voice_client.stop()
 
-    await ctx.send("Queue cleared and disconnected. Bye!")
     await voice_client.disconnect()
 
 @bot.command(name="skip")
@@ -157,5 +157,20 @@ async def resume(ctx):
     
     voice_client.resume()
     await ctx.send("Resumed")
+
+@bot.command(name="queue")
+async def queue(ctx):
+    gID = ctx.guild.id
+
+    if gID not in queues:
+        return await ctx.send("No queue available")
+    
+    msg = ""
+    count = 1
+    for i in queues[gID]:
+        msg += f"{count}: {i[1]}\n"
+        count += 1
+
+    await ctx.send("Songs After:\n" + msg)
 
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
