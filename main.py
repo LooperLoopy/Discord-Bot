@@ -20,6 +20,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # Global vars
 queues = {}
 voice_clients = {}
+guild_settings = {}
 
 async def search_ytdlp_async(query, ydl_opts):
     loop = asyncio.get_running_loop()
@@ -43,15 +44,25 @@ async def play_next_song(voice_client, gID, channel):
         def after_play(error):
             if error:
                 print(f"Error playing {title}: {error}")
-            asyncio.run_coroutine_threadsafe(play_next_song(voice_client, gID, channel), bot.loop)
+
+            if gID in guild_settings and guild_settings[gID]["loop"] == True and voice_client.is_connected():
+                source = discord.FFmpegOpusAudio(audio_url, **ffmpeg_opts, executable="bin\\ffmpeg\\ffmpeg.exe")
+                voice_client.play(source, after=after_play)
+            else:
+                asyncio.run_coroutine_threadsafe(play_next_song(voice_client, gID, channel), bot.loop)
 
         voice_client.play(source, after=after_play)
         asyncio.create_task(channel.send(f"Now Playing: {title}"))
 
     else:
-        asyncio.create_task(channel.send("Queue empty, Loobot is now disconnected. Bye!"))
+        asyncio.create_task(channel.send("Queue empty, Loobot is now disconnected and loop is turned off. Bye!"))
         await voice_client.disconnect()
-        queues[gID] = deque()
+        try:
+            del queues[gID]
+            del voice_clients[gID]
+            del guild_settings[gID]
+        except Exception as e:
+            print(e)
 
 
 @bot.event
@@ -72,7 +83,7 @@ async def play(ctx, *, arg):
     if voice_channel is None:
         await ctx.send(f"{ctx.author.mention} is not in a voice channel")
         return
-    if ctx.guild.id not in voice_clients:
+    if ctx.guild.id not in voice_clients or not voice_clients[gID].is_connected():
         await ctx.send(f"Joining {voice_channel}")
         voice_clients[gID] = await voice_channel.connect()
 
@@ -127,8 +138,16 @@ async def stop(ctx):
 async def skip(ctx):
     gID = ctx.guild.id
     if gID in voice_clients and (voice_clients[gID].is_playing() or voice_clients[gID].is_paused()):
-        voice_clients[gID].stop()
-        await ctx.send("Current song skipped")
+        
+        if gID in guild_settings and guild_settings[gID]["loop"] == True:
+            guild_settings[gID]["loop"] = False
+            voice_clients[gID].stop()
+            await ctx.send("Current song skipped (Looping is on)")
+            guild_settings[gID]["loop"] = True
+        else:
+            voice_clients[gID].stop()
+            await ctx.send("Current song skipped")
+
     else:
         await ctx.send("Loobot currently isn't playing anything")
 
@@ -171,6 +190,22 @@ async def queue(ctx):
         msg += f"{count}: {i[1]}\n"
         count += 1
 
-    await ctx.send("Songs After:\n" + msg)
+    if gID not in guild_settings:
+        guild_settings[gID] = {}
+        guild_settings[gID]["loop"] = False
+
+    await ctx.send(f"Loop: {guild_settings[gID]["loop"]}\nSongs After Current Song:\n{msg}")
+
+@bot.command(name="loop")
+async def loop(ctx):
+    gID = ctx.guild.id
+
+    if gID not in guild_settings:
+        guild_settings[gID] = {}
+        guild_settings[gID]["loop"] = False
+
+    guild_settings[gID]["loop"] = not guild_settings[gID]["loop"]
+
+    await ctx.send(f"Loop set to {guild_settings[gID]["loop"]}")
 
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
